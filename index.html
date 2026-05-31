@@ -52,10 +52,13 @@
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
 
-        .day-card { cursor: pointer; transition: background 0.2s, box-shadow 0.2s; position:relative; }
-        .day-card:hover { background: #eff6ff; }
+        .day-card { transition: background 0.2s, box-shadow 0.2s; position:relative; }
         .day-card.active { background: #dbeafe; box-shadow: inset 4px 0 0 #1d4ed8; }
         .day-card .del-btn { position:absolute; top:6px; right:6px; }
+        .day-actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+        .map-btn { background:#2563eb; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:0; -webkit-appearance:none; appearance:none; display:inline-flex; align-items:center; gap:4px; }
+        .map-btn:hover { background:#1d4ed8; }
+        .map-btn:before { content:""; display:inline-block; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:7px solid #fff; transform:rotate(180deg) translateY(2px); margin-right:4px; }
         .leg { display: flex; gap: 8px; margin-top: 4px; font-size: 13px; color: #374151; }
         .leg-time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #6b7280; min-width: 56px; flex-shrink: 0; font-size: 12px; }
         .leg-where { font-weight: 600; color: #1f2937; }
@@ -471,7 +474,7 @@
             const opts = Object.entries(locations).map(([k, v]) =>
                 '<option value="' + esc(k) + '"' + (k===currentKey?' selected':'') + '>' + esc(v.name) + '</option>'
             ).join('');
-            return '<div class="loc-selector" onclick="event.stopPropagation()">地圖位置: <select onchange="window.updateDayLoc(this)">' + opts + '</select></div>';
+            return '<div class="loc-selector">地圖位置: <select onchange="window.updateDayLoc(this)">' + opts + '</select></div>';
         }
         function renderItinerary() {
             const list = document.getElementById('itinerary-list');
@@ -480,23 +483,24 @@
                 '<button class="del-btn" onclick="window.deleteDay(\'' + esc(d.id) + '\')" title="刪除這一天">×</button>' +
                 '<div class="font-bold text-base pr-8"><span class="editable" contenteditable="true" data-field="title" data-id="' + esc(d.id) + '">' + d.title + '</span></div>' +
                 '<div class="editable text-sm text-gray-700 mt-2" contenteditable="true" data-field="body" data-id="' + esc(d.id) + '">' + d.body + '</div>' +
+                '<div class="day-actions">' +
+                '<button class="map-btn" onclick="window.showDayOnMap(\'' + esc(d.id) + '\')">看地圖</button>' +
                 locSelectorHtml(d.loc) +
+                '</div>' +
                 '</div>'
             ).join('');
             wireDayInteractions();
         }
+        window.showDayOnMap = function(dayId) {
+            const card = document.querySelector('.day-card[data-id="' + dayId + '"]');
+            if (!card) return;
+            document.querySelectorAll('.day-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            const titleEl = card.querySelector('[data-field="title"]');
+            flyToLoc(card.dataset.loc, titleEl ? titleEl.innerText : '');
+        };
         function wireDayInteractions() {
-            document.querySelectorAll('#itinerary-list .day-card').forEach(card => {
-                card.addEventListener('click', (e) => {
-                    if (e.target.closest('.editable, .del-btn, .loc-selector')) return;
-                    document.querySelectorAll('.day-card').forEach(c => c.classList.remove('active'));
-                    card.classList.add('active');
-                    const titleEl = card.querySelector('[data-field="title"]');
-                    flyToLoc(card.dataset.loc, titleEl ? titleEl.innerText : '');
-                });
-            });
             document.querySelectorAll('#itinerary-list .editable').forEach(el => {
-                el.addEventListener('click', e => e.stopPropagation());
                 el.addEventListener('blur', () => {
                     const id = el.dataset.id, field = el.dataset.field;
                     const d = state.days.find(x => x.id === id);
