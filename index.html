@@ -71,7 +71,7 @@
         .sec-header { display:flex; align-items:center; justify-content:space-between; margin-top:8px; margin-bottom:4px; gap: 8px; }
         .sec-header .del-btn { margin-left:8px; font-size:13px; padding:6px 10px; flex-shrink: 0; }
 
-        /* 手機:取消地圖 sticky,讓地圖在行程上方;標題與按鈕拆成兩行 */
+        /* 手機:取消地圖 sticky;標題與按鈕拆成兩行;地圖區塊隱藏 (改用 modal) */
         @media (max-width: 767px) {
             .map-sticky { position: static !important; }
             body { padding: 12px; }
@@ -82,7 +82,32 @@
             header .btn-row { display: flex; gap: 8px; width: 100%; }
             header .btn-row .btn { flex: 1; padding: 10px 12px; font-size: 13px; text-align: center; }
             .tab-btn { padding: 12px 6px; font-size: 14px; }
+            /* 把右側地圖欄整個藏起來,行程拉滿寬 */
+            #map-column { display: none !important; }
         }
+        /* 桌機隱藏 modal */
+        @media (min-width: 768px) {
+            #map-modal { display: none !important; }
+        }
+
+        /* ===== 手機地圖 Modal ===== */
+        #map-modal {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+        }
+        #map-modal.open { display: flex; }
+        #map-modal-header {
+            background: #fff; padding: 12px 16px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #e5e7eb;
+            padding-top: calc(12px + env(safe-area-inset-top));
+        }
+        #map-modal-title { font-weight: 600; font-size: 15px; color: #1f2937; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        #map-modal-close { background:#e5e7eb; border:0; border-radius:50%; width:36px; height:36px; font-size:20px; cursor:pointer; flex-shrink:0; margin-left:12px; }
+        #map-mobile { flex: 1; width: 100%; min-height: 0; }
+        #map-mobile.leaflet-container { background: #aad3df; }
         @media (min-width: 768px) {
             .map-sticky { position: sticky; top: 16px; }
         }
@@ -120,7 +145,7 @@
                 <button class="btn-add" onclick="addDay()">+ 新增一天</button>
             </div>
 
-            <div class="order-1 md:order-2">
+            <div class="order-1 md:order-2" id="map-column">
                 <div class="map-sticky">
                     <h2 class="text-xl font-bold mb-3 flex items-center"><span class="bg-blue-600 text-white w-2 h-6 mr-2 inline-block"></span>路線與景點地圖</h2>
                     <div id="map" class="shadow-md"></div>
@@ -129,6 +154,15 @@
             </div>
         </div>
     </section>
+
+    <!-- 手機版地圖 Modal -->
+    <div id="map-modal">
+        <div id="map-modal-header">
+            <div id="map-modal-title">地圖</div>
+            <button id="map-modal-close" onclick="window.closeMapModal()" aria-label="關閉地圖">×</button>
+        </div>
+        <div id="map-mobile"></div>
+    </div>
 
     <section class="tab-panel" id="tab-book">
         <div class="bg-white p-4 md:p-6 rounded-lg shadow-md max-w-3xl mx-auto">
@@ -375,24 +409,62 @@
             return new TextDecoder().decode(bytes);
         }
 
-        // ====== 地圖 ======
-        let map, markers = {};
-        function initMap() {
-            map = L.map('map').setView([66.5, 25.7], 5);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        // ====== 地圖 (桌機 inline + 手機 modal,兩套獨立 Leaflet 實例) ======
+        let desktopMap, mobileMap;
+        let desktopMarkers = {}, mobileMarkers = {};
+
+        function buildMapOn(containerId) {
+            const m = L.map(containerId).setView([66.5, 25.7], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(m);
+            const marks = {};
             Object.entries(locations).forEach(([key, loc]) => {
                 if (!loc.coords) return;
-                markers[key] = L.marker(loc.coords).addTo(map).bindPopup('<strong>' + esc(loc.name) + '</strong><br>' + esc(loc.desc));
+                marks[key] = L.marker(loc.coords).addTo(m).bindPopup('<strong>' + esc(loc.name) + '</strong><br>' + esc(loc.desc));
             });
             const routeKeys = ['helsinki', 'kemi', 'rovaniemi', 'inari', 'ivalo', 'helsinki'];
-            L.polyline(routeKeys.map(k => locations[k].coords), {color: 'red', weight: 2, dashArray: '5, 10'}).addTo(map);
+            L.polyline(routeKeys.map(k => locations[k].coords), {color: 'red', weight: 2, dashArray: '5, 10'}).addTo(m);
+            return { map: m, markers: marks };
         }
-        function flyToLoc(key) {
+        function initMap() {
+            const desk = buildMapOn('map');
+            desktopMap = desk.map; desktopMarkers = desk.markers;
+        }
+        function ensureMobileMap() {
+            if (mobileMap) return;
+            const mob = buildMapOn('map-mobile');
+            mobileMap = mob.map; mobileMarkers = mob.markers;
+        }
+        function isMobile() { return window.matchMedia('(max-width: 767px)').matches; }
+
+        function flyToLoc(key, dayTitle) {
             const loc = locations[key];
-            if (!loc || !loc.coords || !markers[key]) return;
-            map.flyTo(loc.coords, key === 'taiwan' ? 6 : 8, { duration: 0.8 });
-            markers[key].openPopup();
+            if (!loc || !loc.coords) return;
+            if (isMobile()) {
+                openMapModal(dayTitle || loc.name);
+                ensureMobileMap();
+                setTimeout(() => {
+                    mobileMap.invalidateSize();
+                    mobileMap.flyTo(loc.coords, key === 'taiwan' ? 6 : 8, { duration: 0.6 });
+                    if (mobileMarkers[key]) mobileMarkers[key].openPopup();
+                }, 60);
+            } else {
+                if (!desktopMarkers[key]) return;
+                desktopMap.flyTo(loc.coords, key === 'taiwan' ? 6 : 8, { duration: 0.8 });
+                desktopMarkers[key].openPopup();
+            }
         }
+
+        function openMapModal(title) {
+            const modal = document.getElementById('map-modal');
+            document.getElementById('map-modal-title').textContent = title || '地圖';
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        window.closeMapModal = function() {
+            const modal = document.getElementById('map-modal');
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        };
 
         // ====== 行程 ======
         function locSelectorHtml(currentKey) {
@@ -419,7 +491,8 @@
                     if (e.target.closest('.editable, .del-btn, .loc-selector')) return;
                     document.querySelectorAll('.day-card').forEach(c => c.classList.remove('active'));
                     card.classList.add('active');
-                    flyToLoc(card.dataset.loc);
+                    const titleEl = card.querySelector('[data-field="title"]');
+                    flyToLoc(card.dataset.loc, titleEl ? titleEl.innerText : '');
                 });
             });
             document.querySelectorAll('#itinerary-list .editable').forEach(el => {
@@ -572,7 +645,7 @@
                     const tab = btn.dataset.tab;
                     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
                     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
-                    if (tab === 'itin' && map) setTimeout(() => map.invalidateSize(), 50);
+                    if (tab === 'itin' && desktopMap) setTimeout(() => desktopMap.invalidateSize(), 50);
                 });
             });
         }
