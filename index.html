@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>2027 芬蘭極光旅遊</title>
+    <meta name="description" content="2027 芬蘭極光 10 天高密度行程（2/4 - 2/13），含路線地圖、預訂連結、行李清單，可線上編輯與打勾，資料自動儲存在瀏覽器。">
+    <meta property="og:title" content="2027 芬蘭極光旅遊">
+    <meta property="og:description" content="2027/02/04 - 02/13 芬蘭極光行程規劃，含地圖、預訂連結與行李清單。">
+    <meta property="og:type" content="website">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body { -webkit-text-size-adjust: 100%; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        #map { height: 380px; width: 100%; border-radius: 0.5rem; z-index: 1; }
+        @media (min-width: 768px) { #map { height: 480px; } }
+
+        .editable { padding: 2px 4px; border: 1px dashed transparent; transition: border 0.2s, background 0.2s; border-radius: 3px; -webkit-user-select: text; user-select: text; }
+        .editable:hover { border: 1px dashed #93c5fd; }
+        .editable:focus { border: 1px dashed #3b82f6; background: #fff; outline: none; }
+        .leaflet-popup-content { font-size: 14px; line-height: 1.5; }
+        .cost-badge { background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; margin-top: 4px; }
+        .book-link { color: #2563eb; text-decoration: underline; font-size: 12px; margin-left: 6px; white-space: nowrap; display: inline-block; padding: 2px 0; }
+        .book-link:hover { color: #1d4ed8; }
+        .btn { background:#1f2937; color:#fff; padding:8px 14px; border-radius:6px; font-size:13px; cursor:pointer; border:0; -webkit-appearance: none; appearance: none; }
+        .btn:hover { background:#111827; }
+        .btn-secondary { background:#9ca3af; }
+        .btn-secondary:hover { background:#6b7280; }
+        .btn-add { background:#e5e7eb; color:#1f2937; padding:10px 14px; border-radius:6px; font-size:13px; cursor:pointer; border:1px dashed #9ca3af; width:100%; margin-top:8px; -webkit-appearance: none; appearance: none; }
+        .btn-add:hover { background:#d1d5db; }
+
+        /* 刪除鈕:桌機 hover 才出現,觸控裝置永遠半透明可見 */
+        .del-btn { color:#dc2626; cursor:pointer; font-size:18px; line-height:1; padding:6px 10px; background:none; border:0; opacity:0; transition:opacity 0.15s; border-radius:4px; -webkit-appearance: none; appearance: none; }
+        .del-btn:hover, .del-btn:active { background:#fee2e2; opacity:1 !important; }
+        .day-card:hover .del-btn,
+        .list-item:hover .del-btn,
+        .sec-header:hover .del-btn { opacity:0.5; }
+        @media (hover: none) {
+            .del-btn { opacity: 0.5; }
+            .del-btn:active { opacity: 1; }
+        }
+
+        .mode-banner { background:#fef3c7; color:#92400e; padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; display:none; }
+
+        .tab-btn { padding: 12px 16px; border-bottom: 3px solid transparent; cursor: pointer; font-weight: 600; color: #6b7280; background: transparent; border-top: 0; border-left: 0; border-right: 0; font-size: 15px; -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; }
+        .tab-btn:hover { color: #1f2937; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .day-card { cursor: pointer; transition: background 0.2s, box-shadow 0.2s; position:relative; }
+        .day-card:hover { background: #eff6ff; }
+        .day-card.active { background: #dbeafe; box-shadow: inset 4px 0 0 #1d4ed8; }
+        .day-card .del-btn { position:absolute; top:6px; right:6px; }
+        .leg { display: flex; gap: 8px; margin-top: 4px; font-size: 13px; color: #374151; }
+        .leg-time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #6b7280; min-width: 56px; flex-shrink: 0; font-size: 12px; }
+        .leg-where { font-weight: 600; color: #1f2937; }
+
+        .loc-selector { font-size: 11px; color:#6b7280; margin-top: 6px; }
+        .loc-selector select { font-size: 12px; padding: 4px 6px; border:1px solid #d1d5db; border-radius: 4px; background:#fff; -webkit-appearance: none; appearance: none; }
+
+        .list-item { display:flex; align-items:center; gap:6px; padding:4px 0; }
+        .list-item > label { flex:1; display:flex; gap:8px; align-items:flex-start; cursor:pointer; min-width:0; }
+        .list-item > .del-btn { flex-shrink:0; margin-left:16px; }
+        .list-item input[type=checkbox] { flex-shrink: 0; }
+
+        .sec-header { display:flex; align-items:center; justify-content:space-between; margin-top:8px; margin-bottom:4px; gap: 8px; }
+        .sec-header .del-btn { margin-left:8px; font-size:13px; padding:6px 10px; flex-shrink: 0; }
+
+        /* 手機:取消地圖 sticky,讓地圖在行程上方 */
+        @media (max-width: 767px) {
+            .map-sticky { position: static !important; }
+            body { padding: 12px; }
+            h1 { font-size: 22px !important; }
+            .leg-time { min-width: 48px; }
+        }
+        @media (min-width: 768px) {
+            .map-sticky { position: sticky; top: 16px; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 max-w-6xl mx-auto text-gray-800">
+
+    <header class="mb-4 border-b pb-4 flex flex-wrap items-start justify-between gap-3">
+        <div style="flex:1; min-width: 0;">
+            <h1 class="text-3xl font-bold text-slate-800">2027 芬蘭極光旅遊</h1>
+            <p class="text-slate-500 mt-2 text-sm">日期：<span class="editable" contenteditable="true" id="trip-dates">2027/02/04 - 2027/02/13</span>｜點擊虛線區域可直接編輯，所有變更自動存在你的瀏覽器。</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button class="btn" onclick="copyShareLink()">複製分享連結</button>
+            <button class="btn btn-secondary" onclick="resetAll()">清除我的編輯</button>
+        </div>
+    </header>
+
+    <div id="viewerBanner" class="mode-banner">
+        你正在用「分享連結」檢視。這份內容是發送者的版本——你做的編輯只會存在自己的瀏覽器,不會影響其他人。
+    </div>
+
+    <nav class="flex border-b mb-6">
+        <button class="tab-btn active" data-tab="itin">行程與地圖</button>
+        <button class="tab-btn" data-tab="book">訂票清單</button>
+        <button class="tab-btn" data-tab="pack">行李清單</button>
+    </nav>
+
+    <section class="tab-panel active" id="tab-itin">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="order-2 md:order-1">
+                <h2 class="text-xl font-bold mb-3 flex items-center"><span class="bg-blue-600 text-white w-2 h-6 mr-2 inline-block"></span>互動行程表</h2>
+                <p class="text-xs text-gray-500 mb-3">點擊任一天 → 地圖飛到對應地點。每張卡片底下可調整地圖位置。</p>
+                <div class="bg-white rounded-lg shadow-md divide-y" id="itinerary-list"></div>
+                <button class="btn-add" onclick="addDay()">+ 新增一天</button>
+            </div>
+
+            <div class="order-1 md:order-2">
+                <div class="map-sticky">
+                    <h2 class="text-xl font-bold mb-3 flex items-center"><span class="bg-blue-600 text-white w-2 h-6 mr-2 inline-block"></span>路線與景點地圖</h2>
+                    <div id="map" class="shadow-md"></div>
+                    <p class="text-xs text-gray-500 mt-2">紅色虛線為主路線,點擊行程卡會自動跳到對應地點。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="tab-panel" id="tab-book">
+        <div class="bg-white p-4 md:p-6 rounded-lg shadow-md max-w-3xl mx-auto">
+            <h2 class="text-xl font-bold mb-4 flex items-center"><span class="bg-red-500 text-white w-2 h-6 mr-2 inline-block"></span>預訂狀態管考</h2>
+            <div class="text-sm text-gray-600 mb-4 bg-yellow-50 border border-yellow-200 p-3 rounded">
+                <strong>時間策略:</strong> 2027 年 2 月為北歐大旺季,核心稀缺資源 (破冰船、夜車、伊納里住宿) 務必在 <strong>2026 年 8-10 月</strong> 之間完成預訂。
+            </div>
+            <ul class="space-y-1" id="booking-list"></ul>
+            <button class="btn-add" onclick="addBookingItem()">+ 新增訂票項目</button>
+        </div>
+    </section>
+
+    <section class="tab-panel" id="tab-pack">
+        <div class="bg-white p-4 md:p-6 rounded-lg shadow-md max-w-3xl mx-auto">
+            <h2 class="text-xl font-bold mb-4 flex items-center"><span class="bg-green-600 text-white w-2 h-6 mr-2 inline-block"></span>極地防寒行李清單</h2>
+            <div id="packing-sections"></div>
+            <button class="btn-add" onclick="addPackingSection()">+ 新增分類</button>
+            <div class="text-xs text-gray-400 text-right mt-4">資料來源:VR 芬蘭國鐵、icebreaking.com、Visit Inari、Safartica。價格為歷史推算,實際以官網為準。</div>
+        </div>
+    </section>
+
+    <script>
+    (function(){
+        'use strict';
+
+        const locations = {
+            helsinki:  { name: "赫爾辛基 Helsinki",   coords: [60.1699, 24.9384], desc: "國際線進出 + VR 夜車起點" },
+            kemi:      { name: "凱米 Kemi",            coords: [65.7364, 24.5637], desc: "Sampo 破冰船 (Ajos 港集合)" },
+            rovaniemi: { name: "羅瓦涅米 Rovaniemi",   coords: [66.5039, 25.7294], desc: "聖誕老人村 + Safartica 雪地摩托" },
+            inari:     { name: "伊納里 Inari",         coords: [68.9060, 27.0278], desc: "極光核心,Siida 博物館、湖畔木屋" },
+            ivalo:     { name: "伊瓦洛機場 Ivalo IVL", coords: [68.6073, 27.4053], desc: "國內線返赫爾辛基" },
+            taiwan:    { name: "桃園機場 TPE",         coords: [25.0797, 121.2342], desc: "出發 / 抵達" },
+            none:      { name: "(未指定)",             coords: null, desc: "" }
+        };
+
+        const DEFAULT_DAYS = [
+            { id: 'd1', loc: 'taiwan', title: 'Day 1 (2/4 四) - 台灣出發', body:
+                '<div class="leg"><span class="leg-time">21:30</span><span><span class="leg-where">桃園機場 (TPE)</span> 報到出發,經杜哈/赫爾辛基轉機。建議航班:Finnair AY80 或華航/長榮聯營。</span></div>' +
+                '<span class="cost-badge">機票預估 €1,200</span>' },
+            { id: 'd2', loc: 'helsinki', title: 'Day 2 (2/5 五) - 赫爾辛基市區 + 夜車北上', body:
+                '<div class="leg"><span class="leg-time">06:00</span><span>抵達 <span class="leg-where">赫爾辛基-萬塔機場 (HEL)</span>,搭機場列車 Ring Rail 至中央車站,€4.5</span></div>' +
+                '<div class="leg"><span class="leg-time">10:00</span><span><span class="leg-where">參議院廣場 + 赫爾辛基大教堂</span> (Senaatintori, 免費)</span></div>' +
+                '<div class="leg"><span class="leg-time">12:30</span><span><span class="leg-where">Old Market Hall</span> 午餐,試馴鹿肉湯</span></div>' +
+                '<div class="leg"><span class="leg-time">14:00</span><span><span class="leg-where">岩石教堂 Temppeliaukion kirkko</span> (€8)</span></div>' +
+                '<div class="leg"><span class="leg-time">19:52</span><span><span class="leg-where">赫爾辛基中央車站</span> 月台 6,搭 VR IC273 Santa Claus Express 夜車 → Kemi</span></div>' +
+                '<span class="cost-badge">夜車含衛浴臥鋪 €150</span>' },
+            { id: 'd3', loc: 'kemi', title: 'Day 3 (2/6 六) - 凱米 Sampo 破冰船', body:
+                '<div class="leg"><span class="leg-time">06:53</span><span>抵達 <span class="leg-where">凱米火車站 (Asemakatu)</span>,寄行李於投幣櫃</span></div>' +
+                '<div class="leg"><span class="leg-time">09:30</span><span>於 <span class="leg-where">Kemi Tourist Info (Sataman valtatie 4)</span> 報到</span></div>' +
+                '<div class="leg"><span class="leg-time">10:00</span><span>搭接駁巴士至 <span class="leg-where">Ajos 港</span> (車程 15 分),登 <strong>Sampo 破冰船</strong></span></div>' +
+                '<div class="leg"><span class="leg-time">10:30-14:30</span><span>波的尼亞灣破冰航行 + 冰海漂浮 (含午餐自助餐)</span></div>' +
+                '<div class="leg"><span class="leg-time">15:30</span><span>返凱米市區,可順遊 <span class="leg-where">LumiLinna 雪城堡</span> (€20)</span></div>' +
+                '<div class="leg"><span class="leg-time">18:34</span><span><span class="leg-where">凱米火車站</span> 搭 VR IC265 北上 → Rovaniemi (19:53 抵)</span></div>' +
+                '<span class="cost-badge">破冰船 €350 + 火車 €30 + 住宿 €90</span>' },
+            { id: 'd4', loc: 'rovaniemi', title: 'Day 4 (2/7 日) - 羅瓦涅米聖誕老人村 + 雪地摩托', body:
+                '<div class="leg"><span class="leg-time">09:00</span><span>於旅館前搭 8 號公車 (€3.9) 至 <span class="leg-where">聖誕老人村 Joulupukin Pajakylä (Tähtikuja 1)</span></span></div>' +
+                '<div class="leg"><span class="leg-time">10:00</span><span>跨越 <strong>北極圈黃線</strong>,領取北極圈證書 (€5),與聖誕老人合影 (€40)</span></div>' +
+                '<div class="leg"><span class="leg-time">13:00</span><span>返市區午餐:<span class="leg-where">Restaurant Nili</span> (Valtakatu 20)</span></div>' +
+                '<div class="leg"><span class="leg-time">15:00</span><span><span class="leg-where">Safartica 集合點 (Koskikatu 1)</span>,2 小時雪地摩托車</span></div>' +
+                '<div class="leg"><span class="leg-time">18:00</span><span>晚餐後返旅館。可加碼 <span class="leg-where">Arktikum</span> 北極博物館夜場</span></div>' +
+                '<span class="cost-badge">活動 €160 + 住宿/餐飲 €150</span>' },
+            { id: 'd5', loc: 'inari', title: 'Day 5 (2/8 一) - 前往伊納里 (進入無光害區)', body:
+                '<div class="leg"><span class="leg-time">08:15</span><span><span class="leg-where">羅瓦涅米巴士總站 (Lapinkävijäntie 2)</span> 搭 Matkahuolto 巴士 (車程約 5 小時)</span></div>' +
+                '<div class="leg"><span class="leg-time">13:30</span><span>抵 <span class="leg-where">伊納里巴士站 (Inarintie 38)</span></span></div>' +
+                '<div class="leg"><span class="leg-time">14:30</span><span>入住 <span class="leg-where">Visit Inari 湖畔木屋</span>,湖邊木造小屋附桑拿</span></div>' +
+                '<div class="leg"><span class="leg-time">17:00</span><span>湖邊散步觀星準備,木屋桑拿熱身</span></div>' +
+                '<div class="leg"><span class="leg-time">21:00</span><span>無團自助觀光,木屋外即北緯 68 度極佳觀光點</span></div>' +
+                '<span class="cost-badge">巴士 €60 + 木屋 €150</span>' },
+            { id: 'd6', loc: 'inari', title: 'Day 6 (2/9 二) - 伊納里極光狩獵 #1', body:
+                '<div class="leg"><span class="leg-time">10:00</span><span><span class="leg-where">Siida 薩米博物館 (Inarintie 46)</span> (€15)</span></div>' +
+                '<div class="leg"><span class="leg-time">13:00</span><span><span class="leg-where">Sarrit Café</span> 馴鹿肉派午餐</span></div>' +
+                '<div class="leg"><span class="leg-time">15:00</span><span>木屋休息,確認 KP 指數 (auroraservice.eu)</span></div>' +
+                '<div class="leg"><span class="leg-time">20:30</span><span>於 <span class="leg-where">Visit Inari 接待處</span> 集合,參加 <strong>極光車隊</strong>,4 小時</span></div>' +
+                '<span class="cost-badge">極光團 €150 + 木屋 €150</span>' },
+            { id: 'd7', loc: 'inari', title: 'Day 7 (2/10 三) - 哈士奇雪橇 + 極光狩獵 #2', body:
+                '<div class="leg"><span class="leg-time">10:00</span><span><span class="leg-where">Visit Inari 哈士奇農場</span>,2 小時雪橇體驗</span></div>' +
+                '<div class="leg"><span class="leg-time">14:00</span><span>湖上冰釣 (可選),或回木屋休息</span></div>' +
+                '<div class="leg"><span class="leg-time">17:00</span><span>木屋桑拿,晚餐自煮</span></div>' +
+                '<div class="leg"><span class="leg-time">21:00</span><span>第二次 <strong>極光車隊</strong></span></div>' +
+                '<span class="cost-badge">極光團 €150 + 木屋 €150 + 哈士奇 €120</span>' },
+            { id: 'd8', loc: 'ivalo', title: 'Day 8 (2/11 四) - 國內線返赫爾辛基', body:
+                '<div class="leg"><span class="leg-time">10:00</span><span>退房,接駁車送至 <span class="leg-where">伊瓦洛機場 IVL (Ilmailutie 1)</span>,車程約 45 分</span></div>' +
+                '<div class="leg"><span class="leg-time">12:55</span><span>搭 <span class="leg-where">Finnair AY638</span> IVL → HEL (1h35m)</span></div>' +
+                '<div class="leg"><span class="leg-time">14:30</span><span>抵 HEL,入住 <span class="leg-where">GLO Hotel Airport</span> (機場內 T2)</span></div>' +
+                '<div class="leg"><span class="leg-time">18:00</span><span>機場 Aukio Lounge 晚餐,早睡準備明日長途航班</span></div>' +
+                '<span class="cost-badge">機票 €150 + 住宿 €100</span>' },
+            { id: 'd9', loc: 'helsinki', title: 'Day 9 (2/12 五) - 搭機返台', body:
+                '<div class="leg"><span class="leg-time">14:00</span><span>於 <span class="leg-where">HEL T2</span> 報到,Finnair AY79 或聯營航班</span></div>' +
+                '<div class="leg"><span class="leg-time">17:15</span><span>HEL → TPE,夜宿機上</span></div>' },
+            { id: 'd10', loc: 'taiwan', title: 'Day 10 (2/13 六) - 抵達台灣', body:
+                '<div class="leg"><span class="leg-time">~09:00</span><span>抵達 <span class="leg-where">桃園機場 TPE</span>,行程結束</span></div>' }
+        ];
+
+        const DEFAULT_BOOKINGS = [
+            { id: 'bk-flight', text: '國際來回機票 TPE↔HEL (建議期限: 2026/09)', links: [
+                ['Google Flights', 'https://www.google.com/travel/flights'],
+                ['Skyscanner', 'https://www.skyscanner.com.tw/'],
+                ['Finnair', 'https://www.finnair.com/']
+            ]},
+            { id: 'bk-flight-in', text: 'IVL→HEL 國內線機票 (建議期限: 2026/10)', links: [
+                ['Finnair IVL→HEL', 'https://www.finnair.com/en/flights/city-to-city/ivl/hel'],
+                ['Google Flights', 'https://www.google.com/travel/flights/flights-from-ivalo-to-helsinki.html']
+            ]},
+            { id: 'bk-train', text: 'VR 國鐵夜車臥鋪 HEL→Kemi (約 2026/10 開放訂位)', links: [
+                ['VR 夜車說明', 'https://www.vr.fi/en/night-trains'],
+                ['VR 訂票', 'https://www.vr.fi/en/train-tickets']
+            ]},
+            { id: 'bk-train-kemi-rov', text: 'Kemi → Rovaniemi VR 短程火車 (隨買即可)', links: [
+                ['VR 訂票', 'https://www.vr.fi/en/train-tickets']
+            ]},
+            { id: 'bk-ice', text: '凱米 Sampo 破冰船 (建議期限: 2026/09,極易滿位)', links: [
+                ['icebreaking.com 官網', 'https://www.icebreaking.com/icebreaker-sampo-cruise/'],
+                ['Experience365', 'https://experience365.fi/icebreaker-sampo-useful-information/']
+            ]},
+            { id: 'bk-acc', text: '伊納里湖畔木屋 3 晚 (建議期限: 2026/08)', links: [
+                ['Visit Inari 官網', 'https://visitinari.fi/'],
+                ['Booking', 'https://www.booking.com/searchresults.html?ss=Inari%2C+Finland'],
+                ['Airbnb', 'https://www.airbnb.com/s/Inari--Finland/homes']
+            ]},
+            { id: 'bk-tour', text: '伊納里極光車隊 2 晚 (建議期限: 2026/11,選可免費取消者)', links: [
+                ['Visit Inari', 'https://visitinari.fi/'],
+                ['GetYourGuide', 'https://www.getyourguide.com/']
+            ]},
+            { id: 'bk-husky', text: '伊納里哈士奇雪橇 (建議期限: 2026/11)', links: [
+                ['Visit Inari', 'https://visitinari.fi/']
+            ]},
+            { id: 'bk-rov', text: '羅瓦涅米住宿 1 晚 + 雪地摩托車 (建議期限: 2026/09)', links: [
+                ['Booking', 'https://www.booking.com/searchresults.html?ss=Rovaniemi'],
+                ['Safartica 雪地摩托', 'https://www.safartica.com/snowmobile-safari/'],
+                ['Visit Rovaniemi', 'https://www.visitrovaniemi.fi/']
+            ]},
+            { id: 'bk-bus', text: 'Rovaniemi → Inari 長途巴士 (建議期限: 2026/12)', links: [
+                ['Matkahuolto', 'https://www.matkahuolto.fi/en'],
+                ['Onnibus', 'https://www.onnibus.com/en/index.htm']
+            ]},
+            { id: 'bk-hel', text: '赫爾辛基機場過境旅館 1 晚 (建議期限: 2026/12)', links: [
+                ['Booking', 'https://www.booking.com/searchresults.html?ss=Helsinki+Airport']
+            ]},
+            { id: 'bk-ins', text: '旅遊不便險 + 醫療險 (出發前 1 週投保)', links: [] }
+        ];
+
+        const DEFAULT_PACKING = [
+            { id: 'sec-docs', title: '證件與金錢', items: [
+                '護照 (效期 6 個月以上) + 影本與電子檔備份',
+                '機票/車票/住宿/活動電子憑證 (印一份紙本備用)',
+                '信用卡 2 張 (不同卡別) + 少量歐元現金 (約 €300)',
+                '國際駕照 (若計畫自駕)、駕照正本',
+                '旅遊不便險/醫療險保單 (含 24h 緊急聯絡電話)'
+            ]},
+            { id: 'sec-clothes', title: '服裝 — 三層式洋蔥穿法', items: [
+                '【內層】美麗諾羊毛發熱衣褲 2~3 套 (禁穿純棉,流汗會結冰)',
+                '【中層】厚刷毛/抓絨衣 (Fleece) 或羊毛毛衣 2 件',
+                '【外層】防風防水透氣外套 (GORE-TEX 等級,可外加羽絨)',
+                '【褲子】防風雪褲 / Soft shell 長褲 (拍極光久站必備)',
+                '【襪子】厚羊毛襪 4~5 雙 (溼了就換,腳凍傷最快)',
+                '【內衣褲】排汗速乾款 5~7 件',
+                '【室內衣物】輕便上衣與睡衣 (旅館與木屋內很暖)'
+            ]},
+            { id: 'sec-acc', title: '鞋子與配件', items: [
+                '高筒防水雪靴 (需買大一號,預留厚襪空間)',
+                '室內拖鞋 / 旅館用拖鞋',
+                '冰爪 / 防滑鞋套 (赫爾辛基結冰人行道必備)',
+                '防風防水手套 (建議內薄外厚兩層)',
+                '遮耳毛帽、羊毛圍脖 / Buff、可遮口鼻面罩',
+                '太陽眼鏡 (雪地反光強)、護目鏡 (雪上摩托車用)'
+            ]},
+            { id: 'sec-tech', title: '電子產品', items: [
+                '手機 + 充電線、行動電源 2 顆以上 (鋰電池零下掉電快)',
+                '相機 + 廣角鏡 (拍極光建議 f/2.8 以下) + 備用電池 ×3',
+                '相機防寒套 + 大容量記憶卡 ×2 + 讀卡機',
+                '輕便碳纖維三腳架 (拍極光必備)',
+                '歐規轉接頭 (Type C/F)、多孔 USB 充電器',
+                '歐洲漫遊 SIM / eSIM (Three / Saunalahti / Airalo)',
+                '頭燈 (極光夜外出找路用)、小型 LED 露營燈'
+            ]},
+            { id: 'sec-med', title: '藥品與保健', items: [
+                '個人慢性病藥物 (附英文處方箋)',
+                '感冒藥、退燒止痛 (普拿疼)、腸胃藥、止瀉藥',
+                '暈車/暈船藥 (破冰船、長途巴士用)',
+                'OK 繃、防水透氣膠帶、消炎藥膏',
+                '護唇膏、極地保濕霜、護手霜、凡士林',
+                '高 SPF 防曬乳 (雪地反射紫外線強)',
+                '維他命 C / 益生菌 (長途飛行抗疲勞)'
+            ]},
+            { id: 'sec-toilet', title: '盥洗與日用', items: [
+                '牙刷、牙膏、牙線、漱口水 (旅館多半不提供)',
+                '洗面乳、沐浴乳、洗髮精 (分裝 100ml 以下)',
+                '毛巾、快乾運動巾、隱形眼鏡 + 藥水 + 備用眼鏡',
+                '女性生理用品、刮鬍刀 / 化妝品 (依需求)',
+                '桑拿用泳衣/泳褲 (芬蘭桑拿與冰海漂浮會用到)'
+            ]},
+            { id: 'sec-food', title: '取暖與食物', items: [
+                '暖暖包 20+ 片 (貼手機背蓋、腳底、口袋)',
+                '保溫瓶 (裝熱水/熱茶,極光等待時救命)',
+                '沖泡食品:泡麵、麥片、即溶咖啡、茶包',
+                '行動糧:能量棒、巧克力、堅果、肉乾',
+                '調味料:辣椒醬、醬油包、味增 (思鄉用)'
+            ]},
+            { id: 'sec-misc', title: '行李與其他', items: [
+                '大行李箱 ×1 (28") + 隨身後背包 (含夜車過夜用品)',
+                '壓縮袋 / 衣物收納袋 (羽絨壓縮省空間)',
+                '夾鏈袋數個 (分裝溼衣、收納小物)',
+                '行李秤 (回程怕超重)、TSA 鎖、行李掛牌',
+                '頸枕、眼罩、耳塞 (12+ 小時飛行用)',
+                '小禮物 (給木屋主人/換宿主人,台灣茶葉/鳳梨酥)',
+                '紙本筆記本 + 筆 (手機在零下會關機)'
+            ]}
+        ];
+
+        const STATE_KEY = 'finland2027.state.v2';
+        let state = loadState();
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STATE_KEY);
+                if (raw) return JSON.parse(raw);
+            } catch(e) { console.warn('loadState 失敗', e); }
+            return {
+                days: JSON.parse(JSON.stringify(DEFAULT_DAYS)),
+                bookings: JSON.parse(JSON.stringify(DEFAULT_BOOKINGS)),
+                packing: JSON.parse(JSON.stringify(DEFAULT_PACKING)),
+                tripDates: '2027/02/04 - 2027/02/13',
+                checks: {}
+            };
+        }
+        function saveState() {
+            try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+            catch(e) { console.warn('saveState 失敗', e); }
+        }
+        function newId(prefix) { return prefix + '-' + Date.now() + '-' + Math.floor(Math.random()*1000); }
+        function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        // ====== UTF-8 安全的 base64 (取代 deprecated escape/unescape, iOS Safari 才不會炸) ======
+        function utf8ToBase64(str) {
+            const bytes = new TextEncoder().encode(str);
+            let bin = '';
+            bytes.forEach(b => bin += String.fromCharCode(b));
+            return btoa(bin);
+        }
+        function base64ToUtf8(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
+        }
+
+        // ====== 地圖 ======
+        let map, markers = {};
+        function initMap() {
+            map = L.map('map').setView([66.5, 25.7], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            Object.entries(locations).forEach(([key, loc]) => {
+                if (!loc.coords) return;
+                markers[key] = L.marker(loc.coords).addTo(map).bindPopup('<strong>' + esc(loc.name) + '</strong><br>' + esc(loc.desc));
+            });
+            const routeKeys = ['helsinki', 'kemi', 'rovaniemi', 'inari', 'ivalo', 'helsinki'];
+            L.polyline(routeKeys.map(k => locations[k].coords), {color: 'red', weight: 2, dashArray: '5, 10'}).addTo(map);
+        }
+        function flyToLoc(key) {
+            const loc = locations[key];
+            if (!loc || !loc.coords || !markers[key]) return;
+            map.flyTo(loc.coords, key === 'taiwan' ? 6 : 8, { duration: 0.8 });
+            markers[key].openPopup();
+        }
+
+        // ====== 行程 ======
+        function locSelectorHtml(currentKey) {
+            const opts = Object.entries(locations).map(([k, v]) =>
+                '<option value="' + esc(k) + '"' + (k===currentKey?' selected':'') + '>' + esc(v.name) + '</option>'
+            ).join('');
+            return '<div class="loc-selector" onclick="event.stopPropagation()">地圖位置: <select onchange="window.updateDayLoc(this)">' + opts + '</select></div>';
+        }
+        function renderItinerary() {
+            const list = document.getElementById('itinerary-list');
+            list.innerHTML = state.days.map(d =>
+                '<div class="day-card p-4" data-id="' + esc(d.id) + '" data-loc="' + esc(d.loc) + '">' +
+                '<button class="del-btn" onclick="window.deleteDay(\'' + esc(d.id) + '\')" title="刪除這一天">×</button>' +
+                '<div class="font-bold text-base pr-8"><span class="editable" contenteditable="true" data-field="title" data-id="' + esc(d.id) + '">' + d.title + '</span></div>' +
+                '<div class="editable text-sm text-gray-700 mt-2" contenteditable="true" data-field="body" data-id="' + esc(d.id) + '">' + d.body + '</div>' +
+                locSelectorHtml(d.loc) +
+                '</div>'
+            ).join('');
+            wireDayInteractions();
+        }
+        function wireDayInteractions() {
+            document.querySelectorAll('#itinerary-list .day-card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.editable, .del-btn, .loc-selector')) return;
+                    document.querySelectorAll('.day-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    flyToLoc(card.dataset.loc);
+                });
+            });
+            document.querySelectorAll('#itinerary-list .editable').forEach(el => {
+                el.addEventListener('click', e => e.stopPropagation());
+                el.addEventListener('blur', () => {
+                    const id = el.dataset.id, field = el.dataset.field;
+                    const d = state.days.find(x => x.id === id);
+                    if (d) { d[field] = el.innerHTML; saveState(); }
+                });
+            });
+        }
+        window.addDay = function() {
+            const n = state.days.length + 1;
+            state.days.push({
+                id: newId('d'), loc: 'none',
+                title: 'Day ' + n + ' - 新的一天 (點此編輯)',
+                body: '<div class="leg"><span class="leg-time">時間</span><span>行程內容 (點此編輯)</span></div>'
+            });
+            saveState(); renderItinerary();
+        };
+        window.deleteDay = function(id) {
+            if (!confirm('確定刪除這一天?')) return;
+            state.days = state.days.filter(d => d.id !== id);
+            saveState(); renderItinerary();
+        };
+        window.updateDayLoc = function(sel) {
+            const card = sel.closest('.day-card');
+            const id = card.dataset.id;
+            const d = state.days.find(x => x.id === id);
+            if (d) { d.loc = sel.value; card.dataset.loc = sel.value; saveState(); }
+        };
+
+        // ====== 訂票 ======
+        function bookingLinksHtml(links) {
+            return links.map(pair => '<a class="book-link" href="' + esc(pair[1]) + '" target="_blank" rel="noopener">' + esc(pair[0]) + '</a>').join('');
+        }
+        function renderBookings() {
+            const list = document.getElementById('booking-list');
+            list.innerHTML = state.bookings.map(b =>
+                '<li class="list-item" data-id="' + esc(b.id) + '">' +
+                '<label>' +
+                '<input type="checkbox" data-check="' + esc(b.id) + '" class="form-checkbox h-5 w-5 text-blue-600 mt-1"' + (state.checks[b.id]?' checked':'') + '>' +
+                '<span><span class="editable" contenteditable="true" data-bk-field="text" data-id="' + esc(b.id) + '">' + b.text + '</span>' + bookingLinksHtml(b.links) + '</span>' +
+                '</label>' +
+                '<button class="del-btn" onclick="window.deleteBooking(\'' + esc(b.id) + '\')" title="刪除">×</button>' +
+                '</li>'
+            ).join('');
+            wireBookingInteractions();
+        }
+        function wireBookingInteractions() {
+            document.querySelectorAll('#booking-list .editable').forEach(el => {
+                el.addEventListener('blur', () => {
+                    const b = state.bookings.find(x => x.id === el.dataset.id);
+                    if (b) { b.text = el.innerHTML; saveState(); }
+                });
+            });
+            document.querySelectorAll('#booking-list input[type=checkbox]').forEach(cb => {
+                cb.addEventListener('change', () => { state.checks[cb.dataset.check] = cb.checked; saveState(); });
+            });
+        }
+        window.addBookingItem = function() {
+            const text = prompt('輸入新訂票項目:', '');
+            if (!text) return;
+            state.bookings.push({ id: newId('bk'), text: text, links: [] });
+            saveState(); renderBookings();
+        };
+        window.deleteBooking = function(id) {
+            if (!confirm('確定刪除這個項目?')) return;
+            state.bookings = state.bookings.filter(b => b.id !== id);
+            delete state.checks[id];
+            saveState(); renderBookings();
+        };
+
+        // ====== 行李 ======
+        function renderPacking() {
+            const root = document.getElementById('packing-sections');
+            root.innerHTML = state.packing.map(sec =>
+                '<div class="mb-4" data-sec="' + esc(sec.id) + '">' +
+                '<div class="sec-header">' +
+                '<h3 class="font-semibold text-sm text-gray-700"><span class="editable" contenteditable="true" data-pk-field="title" data-sec="' + esc(sec.id) + '">' + esc(sec.title) + '</span></h3>' +
+                '<button class="del-btn" onclick="window.deletePackingSection(\'' + esc(sec.id) + '\')" title="刪除整個分類">刪除分類 ×</button>' +
+                '</div>' +
+                '<ul class="space-y-1 text-sm">' +
+                sec.items.map(it =>
+                    '<li class="list-item" data-id="' + esc(it.id) + '">' +
+                    '<label>' +
+                    '<input type="checkbox" data-check="' + esc(it.id) + '" class="form-checkbox h-4 w-4 text-green-600"' + (state.checks[it.id]?' checked':'') + '>' +
+                    '<span class="editable" contenteditable="true" data-pk-field="text" data-sec="' + esc(sec.id) + '" data-id="' + esc(it.id) + '">' + it.text + '</span>' +
+                    '</label>' +
+                    '<button class="del-btn" onclick="window.deletePackingItem(\'' + esc(sec.id) + '\',\'' + esc(it.id) + '\')" title="刪除">×</button>' +
+                    '</li>'
+                ).join('') +
+                '</ul>' +
+                '<button class="btn-add" style="margin-top:6px; padding:6px 10px; font-size:12px;" onclick="window.addPackingItem(\'' + esc(sec.id) + '\')">+ 新增項目</button>' +
+                '</div>'
+            ).join('');
+            wirePackingInteractions();
+        }
+        function wirePackingInteractions() {
+            document.querySelectorAll('#packing-sections .editable').forEach(el => {
+                el.addEventListener('blur', () => {
+                    const sec = state.packing.find(s => s.id === el.dataset.sec);
+                    if (!sec) return;
+                    if (el.dataset.pkField === 'title') sec.title = el.innerText;
+                    else {
+                        const it = sec.items.find(x => x.id === el.dataset.id);
+                        if (it) it.text = el.innerHTML;
+                    }
+                    saveState();
+                });
+            });
+            document.querySelectorAll('#packing-sections input[type=checkbox]').forEach(cb => {
+                cb.addEventListener('change', () => { state.checks[cb.dataset.check] = cb.checked; saveState(); });
+            });
+        }
+        function normalizePacking() {
+            state.packing.forEach(sec => {
+                sec.items = sec.items.map(it => typeof it === 'string' ? { id: newId('pk'), text: it } : it);
+            });
+        }
+        window.addPackingSection = function() {
+            const title = prompt('新分類名稱:', '');
+            if (!title) return;
+            state.packing.push({ id: newId('sec'), title: title, items: [] });
+            saveState(); renderPacking();
+        };
+        window.deletePackingSection = function(id) {
+            if (!confirm('刪除整個分類?')) return;
+            state.packing = state.packing.filter(s => s.id !== id);
+            saveState(); renderPacking();
+        };
+        window.addPackingItem = function(secId) {
+            const text = prompt('新項目:', '');
+            if (!text) return;
+            const sec = state.packing.find(s => s.id === secId);
+            if (sec) { sec.items.push({ id: newId('pk'), text: text }); saveState(); renderPacking(); }
+        };
+        window.deletePackingItem = function(secId, itemId) {
+            const sec = state.packing.find(s => s.id === secId);
+            if (!sec) return;
+            sec.items = sec.items.filter(x => x.id !== itemId);
+            delete state.checks[itemId];
+            saveState(); renderPacking();
+        };
+
+        // ====== Tab ======
+        function setupTabs() {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+                    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+                    if (tab === 'itin' && map) setTimeout(() => map.invalidateSize(), 50);
+                });
+            });
+        }
+        function setupTripDates() {
+            const el = document.getElementById('trip-dates');
+            el.innerText = state.tripDates;
+            el.addEventListener('blur', () => { state.tripDates = el.innerText; saveState(); });
+        }
+
+        window.copyShareLink = function() {
+            try {
+                const json = JSON.stringify(state);
+                const b64 = utf8ToBase64(json);
+                const url = location.origin + location.pathname + '#s=' + b64;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(
+                        () => alert('分享連結已複製!\n貼給朋友後,他打開就會看到你目前的內容。'),
+                        () => prompt('請手動複製此網址:', url)
+                    );
+                } else {
+                    prompt('請手動複製此網址:', url);
+                }
+            } catch(e) {
+                alert('產生分享連結失敗: ' + e.message);
+            }
+        };
+        function applySharedPayloadIfAny() {
+            if (!location.hash.startsWith('#s=')) return;
+            try {
+                const json = base64ToUtf8(location.hash.slice(3));
+                state = JSON.parse(json);
+                const banner = document.getElementById('viewerBanner');
+                if (banner) banner.style.display = 'block';
+            } catch(e) {
+                console.warn('分享資料解析失敗', e);
+                // 解析失敗就走預設,不要整個壞掉
+            }
+        }
+        window.resetAll = function() {
+            if (!confirm('確定要清除你在這台裝置上的所有編輯與勾選嗎?')) return;
+            try { localStorage.removeItem(STATE_KEY); } catch(e) {}
+            location.hash = '';
+            location.reload();
+        };
+
+        // ====== 啟動 ======
+        function boot() {
+            try {
+                applySharedPayloadIfAny();
+                normalizePacking();
+                setupTabs();
+                setupTripDates();
+                initMap();
+                renderItinerary();
+                renderBookings();
+                renderPacking();
+            } catch(e) {
+                console.error('初始化失敗', e);
+                document.body.insertAdjacentHTML('afterbegin',
+                    '<div style="background:#fee2e2;color:#991b1b;padding:12px;margin:12px;border-radius:6px;">' +
+                    '頁面初始化失敗: ' + esc(e.message) + '。請按右上「清除我的編輯」重試。' +
+                    '</div>');
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', boot);
+        } else {
+            boot();
+        }
+    })();
+    </script>
+</body>
+</html>
